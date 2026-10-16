@@ -14,6 +14,10 @@
            05 WS-RUNNING               PIC X VALUE 'Y'.
            05 WS-MENU-CHOICE           PIC X(2) VALUE SPACES.
            05 WS-INDEX                 PIC 9(4) COMP-5 VALUE 0.
+           05 WS-INDEX-2               PIC 9(4) COMP-5 VALUE 0.
+           05 WS-ID-FOUND              PIC X VALUE 'N'.
+           05 WS-SELECTED-ID           PIC 9(6) VALUE 0.
+           05 WS-SELECTED-INDEX        PIC 9(4) COMP-5 VALUE 0.
            05 WS-NEXT-PRODUCT-ID       PIC 9(6) VALUE 1.
            05 WS-INPUT-PRICE           PIC 9(7)V99 VALUE 0.
            05 WS-INPUT-QUANTITY        PIC S9(7) COMP-5 VALUE 0.
@@ -106,7 +110,8 @@
            DISPLAY ' '
            DISPLAY '-------------- MAIN MENU --------------'
            DISPLAY '1. List all products'
-           DISPLAY '2. Add a product'
+           DISPLAY '2. Search product by ID'
+           DISPLAY '3. Add a product'
            DISPLAY '0. Exit'
            DISPLAY '---------------------------------------'.
 
@@ -118,7 +123,8 @@
        PROCESS-MENU-CHOICE.
            EVALUATE WS-MENU-CHOICE
                WHEN '1' PERFORM LIST-PRODUCTS
-               WHEN '2' PERFORM ADD-PRODUCT
+               WHEN '2' PERFORM SEARCH-PRODUCT
+               WHEN '3' PERFORM ADD-PRODUCT
                WHEN '0' MOVE 'N' TO WS-RUNNING
                WHEN OTHER
                    DISPLAY 'Invalid menu choice. Please try again.'
@@ -151,6 +157,43 @@
                PRODUCT-NAME(WS-INDEX) ' '
                WS-DISPLAY-QUANTITY ' '
                WS-DISPLAY-AMOUNT.
+
+      * Shows all details of one product.
+       SEARCH-PRODUCT.
+           PERFORM ACCEPT-PRODUCT-ID
+           PERFORM FIND-PRODUCT-BY-ID
+           IF WS-ID-FOUND = 'Y'
+               DISPLAY 'Product found:'
+               DISPLAY 'ID: ' PRODUCT-ID(WS-SELECTED-INDEX)
+               DISPLAY 'Name: ' PRODUCT-NAME(WS-SELECTED-INDEX)
+               DISPLAY 'Category: ' PRODUCT-CATEGORY(WS-SELECTED-INDEX)
+               DISPLAY 'Supplier: ' PRODUCT-SUPPLIER(WS-SELECTED-INDEX)
+               DISPLAY 'Quantity: ' PRODUCT-QUANTITY(WS-SELECTED-INDEX)
+               DISPLAY 'Unit price: '
+                   PRODUCT-UNIT-PRICE(WS-SELECTED-INDEX)
+               DISPLAY 'Reorder level: '
+                   PRODUCT-REORDER-LEVEL(WS-SELECTED-INDEX)
+           ELSE
+               DISPLAY 'No active product exists with that ID.'
+           END-IF.
+
+       ACCEPT-PRODUCT-ID.
+           MOVE 0 TO WS-SELECTED-ID
+           DISPLAY 'Enter product ID: ' WITH NO ADVANCING
+           ACCEPT WS-SELECTED-ID.
+
+      * Sets WS-ID-FOUND and WS-SELECTED-INDEX for the entered ID.
+       FIND-PRODUCT-BY-ID.
+           MOVE 'N' TO WS-ID-FOUND
+           MOVE 0 TO WS-SELECTED-INDEX
+           PERFORM VARYING WS-INDEX-2 FROM 1 BY 1
+               UNTIL WS-INDEX-2 > WS-PRODUCT-COUNT
+               IF PRODUCT-ACTIVE(WS-INDEX-2) = 'Y'
+                   AND PRODUCT-ID(WS-INDEX-2) = WS-SELECTED-ID
+                   MOVE 'Y' TO WS-ID-FOUND
+                   MOVE WS-INDEX-2 TO WS-SELECTED-INDEX
+               END-IF
+           END-PERFORM.
 
       * Asks for each field, then reuses ADD-PRODUCT-FROM-TEMP.
        ADD-PRODUCT.
