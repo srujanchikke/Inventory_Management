@@ -50,6 +50,15 @@
            05 WS-DISPLAY-TAX           PIC Z,ZZZ,ZZZ,ZZ9.99.
            05 WS-DISPLAY-DISCOUNT      PIC Z,ZZZ,ZZZ,ZZ9.99.
            05 WS-DISPLAY-COUNT         PIC ZZZZ9.
+      *> narrower pictures so a history row fits on one line
+       01  WS-HIST-FIELDS.
+           05 WS-H-QTY                 PIC -(6)9.
+           05 WS-H-AMT                 PIC Z(7)9.99.
+           05 WS-H-GST                 PIC Z(6)9.99.
+           05 WS-H-DISC                PIC Z(6)9.99.
+       01  WS-REPORT-DETAILS.
+           05 WS-REPORT-TITLE          PIC X(50) VALUE SPACES.
+           05 WS-REPORT-LINE           PIC X(78) VALUE ALL '='.
        01  PRODUCT-TABLE.
            05 PRODUCT-ENTRY OCCURS 200 TIMES.
               10 PRODUCT-ID            PIC 9(6).
@@ -546,8 +555,8 @@
       * Anything at or under its reorder level, so we know what to
       * order on the next supplier visit.
        LOW-STOCK-REPORT.
-           DISPLAY ' '
-           DISPLAY 'LOW-STOCK REPORT'
+           MOVE 'LOW-STOCK REPORT' TO WS-REPORT-TITLE
+           PERFORM PRINT-REPORT-HEADER
            DISPLAY 'Products at or below their reorder level:'
            MOVE 0 TO WS-REPORT-COUNT
            PERFORM VARYING WS-INDEX FROM 1 BY 1
@@ -583,26 +592,43 @@
            END-PERFORM
            MOVE WS-REPORT-VALUE TO WS-DISPLAY-AMOUNT
            MOVE WS-REPORT-COUNT TO WS-DISPLAY-COUNT
-           DISPLAY ' '
-           DISPLAY 'INVENTORY VALUATION REPORT'
+           MOVE 'INVENTORY VALUATION' TO WS-REPORT-TITLE
+           PERFORM PRINT-REPORT-HEADER
            DISPLAY 'Active product types: ' WS-DISPLAY-COUNT
            DISPLAY 'Total inventory value: ' WS-DISPLAY-AMOUNT
            DISPLAY 'Currency: ' WS-CURRENCY.
 
        DISPLAY-TRANSACTION-HISTORY.
-           DISPLAY ' '
-           DISPLAY 'TRANSACTION HISTORY'
+           MOVE 'TRANSACTION HISTORY' TO WS-REPORT-TITLE
+           PERFORM PRINT-REPORT-HEADER
+           IF WS-TRANSACTION-COUNT = 0
+               DISPLAY 'No transactions yet.'
+               EXIT PARAGRAPH
+           END-IF
+           DISPLAY 'TXN#     DATE       TYPE     PROD       QTY'
+                   '      AMOUNT        GST   DISCOUNT'
            PERFORM VARYING WS-INDEX FROM 1 BY 1
                UNTIL WS-INDEX > WS-TRANSACTION-COUNT
                IF TRANSACTION-STATUS(WS-INDEX) = 'Y'
+                   MOVE TRANSACTION-QUANTITY(WS-INDEX) TO WS-H-QTY
+                   MOVE TRANSACTION-AMOUNT(WS-INDEX)   TO WS-H-AMT
+                   MOVE TRANSACTION-GST(WS-INDEX)      TO WS-H-GST
+                   MOVE TRANSACTION-DISCOUNT(WS-INDEX) TO WS-H-DISC
                    DISPLAY TRANSACTION-ID(WS-INDEX) ' '
                        TRANSACTION-DATE(WS-INDEX) ' '
                        TRANSACTION-TYPE(WS-INDEX) ' '
                        TRANSACTION-PRODUCT(WS-INDEX) ' '
-                       TRANSACTION-QUANTITY(WS-INDEX) ' '
-                       TRANSACTION-AMOUNT(WS-INDEX)
+                       WS-H-QTY ' ' WS-H-AMT ' '
+                       WS-H-GST ' ' WS-H-DISC
                END-IF
            END-PERFORM.
+
+       PRINT-REPORT-HEADER.
+      *> set WS-REPORT-TITLE before calling
+           DISPLAY ' '
+           DISPLAY WS-REPORT-LINE
+           DISPLAY '  ' FUNCTION TRIM(WS-REPORT-TITLE)
+           DISPLAY WS-REPORT-LINE.
 
        SHUTDOWN-SYSTEM.
            DISPLAY ' '
