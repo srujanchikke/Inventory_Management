@@ -89,6 +89,7 @@
            05 WS-PRODUCT-COUNT         PIC 9(4) COMP-5 VALUE 0.
            05 WS-TRANSACTION-COUNT     PIC 9(4) COMP-5 VALUE 0.
            05 WS-TRANSACTION-LIMIT     PIC 9(4) COMP-5 VALUE 1000.
+           05 WS-ISSUE-COUNT           PIC 9(3) VALUE 0.
        PROCEDURE DIVISION.
        MAIN-PROCEDURE.
            PERFORM INITIALIZE-SYSTEM
@@ -643,7 +644,43 @@
 
        SHUTDOWN-SYSTEM.
            DISPLAY ' '
+           PERFORM SANITY-CHECKS
+      *> TODO: write PRODUCT-TABLE / TRANSACTION-TABLE to a file here
+      *>       so stock survives a restart. Everything is lost on exit.
            DISPLAY 'Session ended.'.
+
+       SANITY-CHECKS.
+           MOVE 0 TO WS-ISSUE-COUNT
+           PERFORM VARYING WS-INDEX FROM 1 BY 1
+               UNTIL WS-INDEX > WS-PRODUCT-COUNT
+               IF PRODUCT-ACTIVE(WS-INDEX) = 'Y'
+                   IF PRODUCT-QUANTITY(WS-INDEX) < 0
+                       DISPLAY 'WARN negative stock, ID '
+                           PRODUCT-ID(WS-INDEX)
+                       ADD 1 TO WS-ISSUE-COUNT
+                   END-IF
+                   IF PRODUCT-UNIT-PRICE(WS-INDEX) = 0
+                       DISPLAY 'WARN zero price, ID '
+                           PRODUCT-ID(WS-INDEX)
+                       ADD 1 TO WS-ISSUE-COUNT
+                   END-IF
+               END-IF
+           END-PERFORM
+           PERFORM VARYING WS-INDEX FROM 1 BY 1
+               UNTIL WS-INDEX > WS-TRANSACTION-COUNT
+               IF TRANSACTION-QUANTITY(WS-INDEX) NOT > 0
+                   DISPLAY 'WARN bad qty on txn '
+                       TRANSACTION-ID(WS-INDEX)
+                   ADD 1 TO WS-ISSUE-COUNT
+               END-IF
+           END-PERFORM
+      *>   DISPLAY 'DBG prod=' WS-PRODUCT-COUNT
+      *>           ' txn=' WS-TRANSACTION-COUNT
+           IF WS-ISSUE-COUNT = 0
+               DISPLAY 'End of session checks OK.'
+           ELSE
+               DISPLAY WS-ISSUE-COUNT ' problem(s) found, see above.'
+           END-IF.
 
        UPD-PRODUCT.
            PERFORM ACCEPT-PRODUCT-ID
