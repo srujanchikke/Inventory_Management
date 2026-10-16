@@ -26,6 +26,7 @@
            05 WS-TEMP-CATEGORY         PIC X(20) VALUE SPACES.
            05 WS-TEMP-SUPPLIER         PIC X(30) VALUE SPACES.
            05 WS-REPORT-COUNT          PIC 9(4) COMP-5 VALUE 0.
+           05 WS-REPORT-VALUE          PIC 9(11)V99 VALUE 0.
            05 WS-CURRENCY              PIC X(3) VALUE 'INR'.
            05 WS-NEXT-TRANSACTION-ID   PIC 9(8) VALUE 1.
            05 WS-TRANSACTION-MODE      PIC X(8) VALUE SPACES.
@@ -166,6 +167,8 @@
            DISPLAY '6. Record a sale'
            DISPLAY '7. Process a return'
            DISPLAY '8. Low-stock report'
+           DISPLAY '9. Inventory valuation'
+           DISPLAY '10. Transaction history'
            DISPLAY '0. Exit'
            DISPLAY '---------------------------------------'.
 
@@ -184,6 +187,8 @@
                WHEN '6' PERFORM RECORD-SALE
                WHEN '7' PERFORM PROCESS-RETURN
                WHEN '8' PERFORM LOW-STOCK-REPORT
+               WHEN '9' PERFORM INVENTORY-VALUATION
+               WHEN '10' PERFORM DISPLAY-TRANSACTION-HISTORY
                WHEN '0' MOVE 'N' TO WS-RUNNING
                WHEN OTHER
                    DISPLAY 'Invalid menu choice. Please try again.'
@@ -562,6 +567,42 @@
                MOVE WS-REPORT-COUNT TO WS-DISPLAY-COUNT
                DISPLAY WS-DISPLAY-COUNT ' item(s) need restocking.'
            END-IF.
+
+      * Stock value at unit price (not cost price - we don't store it).
+       INVENTORY-VALUATION.
+           MOVE 0 TO WS-REPORT-VALUE
+           MOVE 0 TO WS-REPORT-COUNT
+           PERFORM VARYING WS-INDEX FROM 1 BY 1
+               UNTIL WS-INDEX > WS-PRODUCT-COUNT
+               IF PRODUCT-ACTIVE(WS-INDEX) = 'Y'
+                   COMPUTE WS-REPORT-VALUE = WS-REPORT-VALUE
+                       + (PRODUCT-QUANTITY(WS-INDEX)
+                       * PRODUCT-UNIT-PRICE(WS-INDEX))
+                   ADD 1 TO WS-REPORT-COUNT
+               END-IF
+           END-PERFORM
+           MOVE WS-REPORT-VALUE TO WS-DISPLAY-AMOUNT
+           MOVE WS-REPORT-COUNT TO WS-DISPLAY-COUNT
+           DISPLAY ' '
+           DISPLAY 'INVENTORY VALUATION REPORT'
+           DISPLAY 'Active product types: ' WS-DISPLAY-COUNT
+           DISPLAY 'Total inventory value: ' WS-DISPLAY-AMOUNT
+           DISPLAY 'Currency: ' WS-CURRENCY.
+
+       DISPLAY-TRANSACTION-HISTORY.
+           DISPLAY ' '
+           DISPLAY 'TRANSACTION HISTORY'
+           PERFORM VARYING WS-INDEX FROM 1 BY 1
+               UNTIL WS-INDEX > WS-TRANSACTION-COUNT
+               IF TRANSACTION-STATUS(WS-INDEX) = 'Y'
+                   DISPLAY TRANSACTION-ID(WS-INDEX) ' '
+                       TRANSACTION-DATE(WS-INDEX) ' '
+                       TRANSACTION-TYPE(WS-INDEX) ' '
+                       TRANSACTION-PRODUCT(WS-INDEX) ' '
+                       TRANSACTION-QUANTITY(WS-INDEX) ' '
+                       TRANSACTION-AMOUNT(WS-INDEX)
+               END-IF
+           END-PERFORM.
 
        SHUTDOWN-SYSTEM.
            DISPLAY ' '
