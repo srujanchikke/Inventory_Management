@@ -27,6 +27,12 @@
            05 WS-TEMP-SUPPLIER         PIC X(30) VALUE SPACES.
            05 WS-REPORT-COUNT          PIC 9(4) COMP-5 VALUE 0.
            05 WS-CURRENCY              PIC X(3) VALUE 'INR'.
+           05 WS-NEXT-TRANSACTION-ID   PIC 9(8) VALUE 1.
+           05 WS-TRANSACTION-MODE      PIC X(8) VALUE SPACES.
+           05 WS-QUANTITY              PIC S9(7) COMP-5 VALUE 0.
+           05 WS-UNIT-PRICE            PIC 9(7)V99 VALUE 0.
+           05 WS-TOTAL                 PIC 9(9)V99 VALUE 0.
+           05 WS-DATE-TEXT             PIC X(8) VALUE SPACES.
        01  WS-DISPLAY-FIELDS.
            05 WS-DISPLAY-ID            PIC ZZZZZ9.
            05 WS-DISPLAY-QUANTITY      PIC ZZZZZZZ9.
@@ -42,8 +48,20 @@
               10 PRODUCT-UNIT-PRICE    PIC 9(7)V99.
               10 PRODUCT-REORDER-LEVEL PIC 9(7).
               10 PRODUCT-ACTIVE        PIC X.
+      * One row per stock movement (receipt for now, sales later).
+       01  TRANSACTION-TABLE.
+           05 TRANSACTION-ENTRY OCCURS 1000 TIMES.
+              10 TRANSACTION-ID        PIC 9(8).
+              10 TRANSACTION-PRODUCT   PIC 9(6).
+              10 TRANSACTION-TYPE      PIC X(8).
+              10 TRANSACTION-QUANTITY  PIC S9(7) COMP-5.
+              10 TRANSACTION-AMOUNT    PIC 9(9)V99.
+              10 TRANSACTION-DATE      PIC X(10).
+              10 TRANSACTION-STATUS    PIC X.
        01  WS-TABLE-COUNTERS.
            05 WS-PRODUCT-COUNT         PIC 9(4) COMP-5 VALUE 0.
+           05 WS-TRANSACTION-COUNT     PIC 9(4) COMP-5 VALUE 0.
+           05 WS-TRANSACTION-LIMIT     PIC 9(4) COMP-5 VALUE 1000.
        PROCEDURE DIVISION.
        MAIN-PROCEDURE.
            PERFORM INITIALIZE-SYSTEM
@@ -58,8 +76,11 @@
       * Start of session - empty tables and print the banner.
        INITIALIZE-SYSTEM.
            MOVE 0 TO WS-PRODUCT-COUNT
+           MOVE 0 TO WS-TRANSACTION-COUNT
            MOVE 1 TO WS-NEXT-PRODUCT-ID
+           MOVE 1 TO WS-NEXT-TRANSACTION-ID
            PERFORM CLEAR-PRODUCT-TABLE
+           PERFORM CLEAR-TRANSACTION-TABLE
            PERFORM LOAD-SAMPLE-DATA
            DISPLAY ' '
            DISPLAY '   INVENTORY MANAGEMENT SYSTEM'
@@ -72,6 +93,12 @@
                UNTIL WS-INDEX > 200
                INITIALIZE PRODUCT-ENTRY(WS-INDEX)
                MOVE 'N' TO PRODUCT-ACTIVE(WS-INDEX)
+           END-PERFORM.
+
+       CLEAR-TRANSACTION-TABLE.
+           PERFORM VARYING WS-INDEX FROM 1 BY 1
+               UNTIL WS-INDEX > 1000
+               INITIALIZE TRANSACTION-ENTRY(WS-INDEX)
            END-PERFORM.
 
       * A few items so the menus have something to show while testing.
@@ -114,6 +141,7 @@
            DISPLAY '2. Search product by ID'
            DISPLAY '3. Add a product'
            DISPLAY '4. Update product details'
+           DISPLAY '5. Receive stock'
            DISPLAY '0. Exit'
            DISPLAY '---------------------------------------'.
 
@@ -128,6 +156,7 @@
                WHEN '2' PERFORM SEARCH-PRODUCT
                WHEN '3' PERFORM ADD-PRODUCT
                WHEN '4' PERFORM UPD-PRODUCT
+               WHEN '5' PERFORM RECEIVE-STOCK
                WHEN '0' MOVE 'N' TO WS-RUNNING
                WHEN OTHER
                    DISPLAY 'Invalid menu choice. Please try again.'
@@ -267,6 +296,64 @@
                MOVE 5 TO PRODUCT-REORDER-LEVEL(WS-PRODUCT-COUNT)
                MOVE 'Y' TO PRODUCT-ACTIVE(WS-PRODUCT-COUNT)
                ADD 1 TO WS-NEXT-PRODUCT-ID
+           END-IF.
+
+      * Goods coming in from a supplier.
+       RECEIVE-STOCK.
+           PERFORM ACCEPT-PRODUCT-ID
+           PERFORM FIND-PRODUCT-BY-ID
+           IF WS-ID-FOUND = 'Y'
+               IF WS-TRANSACTION-COUNT >= WS-TRANSACTION-LIMIT
+                   DISPLAY 'Transaction history full;'
+                       ' receipt cancelled.'
+               ELSE
+                   PERFORM ACCEPT-RECEIVED-QUANTITY
+                   IF WS-INPUT-QUANTITY > 0
+                       MOVE WS-INPUT-QUANTITY TO WS-QUANTITY
+                       MOVE PRODUCT-UNIT-PRICE(WS-SELECTED-INDEX)
+                           TO WS-UNIT-PRICE
+                       COMPUTE WS-TOTAL ROUNDED =
+                           WS-QUANTITY * WS-UNIT-PRICE
+                       ADD WS-INPUT-QUANTITY TO
+                           PRODUCT-QUANTITY(WS-SELECTED-INDEX)
+                       MOVE 'RECEIPT' TO WS-TRANSACTION-MODE
+                       PERFORM WRITE-TRANSACTION
+                       DISPLAY 'Stock received successfully.'
+                   ELSE
+                       DISPLAY 'Quantity must be greater than zero.'
+                   END-IF
+               END-IF
+           ELSE
+               DISPLAY 'Product ID was not found.'
+           END-IF.
+
+       ACCEPT-RECEIVED-QUANTITY.
+           MOVE 0 TO WS-INPUT-QUANTITY
+           DISPLAY 'Quantity received: ' WITH NO ADVANCING
+           ACCEPT WS-INPUT-QUANTITY.
+
+      * Adds a row to the transaction table.
+      * Caller sets WS-TRANSACTION-MODE, WS-QUANTITY and WS-TOTAL.
+       WRITE-TRANSACTION.
+           IF WS-TRANSACTION-COUNT < WS-TRANSACTION-LIMIT
+               ADD 1 TO WS-TRANSACTION-COUNT
+               MOVE WS-NEXT-TRANSACTION-ID TO
+                   TRANSACTION-ID(WS-TRANSACTION-COUNT)
+               MOVE PRODUCT-ID(WS-SELECTED-INDEX) TO
+                   TRANSACTION-PRODUCT(WS-TRANSACTION-COUNT)
+               MOVE WS-TRANSACTION-MODE TO
+                   TRANSACTION-TYPE(WS-TRANSACTION-COUNT)
+               MOVE WS-QUANTITY TO
+                   TRANSACTION-QUANTITY(WS-TRANSACTION-COUNT)
+               MOVE WS-TOTAL TO
+                   TRANSACTION-AMOUNT(WS-TRANSACTION-COUNT)
+               ACCEPT WS-DATE-TEXT FROM DATE YYYYMMDD
+               MOVE WS-DATE-TEXT TO
+                   TRANSACTION-DATE(WS-TRANSACTION-COUNT)
+               MOVE 'Y' TO TRANSACTION-STATUS(WS-TRANSACTION-COUNT)
+               ADD 1 TO WS-NEXT-TRANSACTION-ID
+           ELSE
+               DISPLAY 'Transaction history is full.'
            END-IF.
 
        SHUTDOWN-SYSTEM.
