@@ -30,6 +30,7 @@
            05 WS-NEXT-TRANSACTION-ID   PIC 9(8) VALUE 1.
            05 WS-TRANSACTION-MODE      PIC X(8) VALUE SPACES.
            05 WS-QUANTITY              PIC S9(7) COMP-5 VALUE 0.
+              88 IS-BULK-SALE          VALUE 50 THRU 9999999.
            05 WS-UNIT-PRICE            PIC 9(7)V99 VALUE 0.
            05 WS-TOTAL                 PIC 9(9)V99 VALUE 0.
            05 WS-GRAND-TOTAL           PIC 9(11)V99 VALUE 0.
@@ -37,12 +38,16 @@
            05 WS-GST-PCT               PIC 99 VALUE 0.
               88 VALID-GST-SLAB        VALUES 0 5 18.
            05 WS-GST-RATE              PIC 9V99 VALUE 0.
+           05 WS-DISCOUNT-RATE         PIC 9V99 VALUE 0.
+           05 WS-DISCOUNT-AMOUNT       PIC 9(9)V99 VALUE 0.
+           05 WS-BULK-DISC-RATE        PIC 9V99 VALUE 0.05. *> 50+ qty
            05 WS-DATE-TEXT             PIC X(8) VALUE SPACES.
        01  WS-DISPLAY-FIELDS.
            05 WS-DISPLAY-ID            PIC ZZZZZ9.
            05 WS-DISPLAY-QUANTITY      PIC ZZZZZZZ9.
            05 WS-DISPLAY-AMOUNT        PIC Z,ZZZ,ZZZ,ZZ9.99.
            05 WS-DISPLAY-TAX           PIC Z,ZZZ,ZZZ,ZZ9.99.
+           05 WS-DISPLAY-DISCOUNT      PIC Z,ZZZ,ZZZ,ZZ9.99.
            05 WS-DISPLAY-COUNT         PIC ZZZZ9.
        01  PRODUCT-TABLE.
            05 PRODUCT-ENTRY OCCURS 200 TIMES.
@@ -66,6 +71,7 @@
               10 TRANSACTION-QUANTITY  PIC S9(7) COMP-5.
               10 TRANSACTION-AMOUNT    PIC 9(9)V99.
               10 TRANSACTION-GST       PIC 9(9)V99.
+              10 TRANSACTION-DISCOUNT  PIC 9(9)V99.
               10 TRANSACTION-DATE      PIC X(10).
               10 TRANSACTION-STATUS    PIC X.
        01  WS-TABLE-COUNTERS.
@@ -354,6 +360,7 @@
                        COMPUTE WS-TOTAL ROUNDED =
                            WS-QUANTITY * WS-UNIT-PRICE
                        MOVE 0 TO WS-TAX-AMOUNT    *> no GST on inward
+                       MOVE 0 TO WS-DISCOUNT-AMOUNT
                        ADD WS-INPUT-QUANTITY TO
                            PRODUCT-QUANTITY(WS-SELECTED-INDEX)
                        MOVE 'RECEIPT' TO WS-TRANSACTION-MODE
@@ -410,9 +417,17 @@
            MOVE WS-INPUT-QUANTITY TO WS-QUANTITY
            MOVE PRODUCT-UNIT-PRICE(WS-SELECTED-INDEX) TO WS-UNIT-PRICE
            COMPUTE WS-TOTAL ROUNDED = WS-QUANTITY * WS-UNIT-PRICE
+           IF IS-BULK-SALE
+               MOVE WS-BULK-DISC-RATE TO WS-DISCOUNT-RATE
+           END-IF
+           COMPUTE WS-DISCOUNT-AMOUNT ROUNDED =
+               WS-TOTAL * WS-DISCOUNT-RATE
+      *> GST is on the value after discount, not the list price
            COMPUTE WS-TAX-AMOUNT ROUNDED =
-               WS-TOTAL * PRODUCT-GST-RATE(WS-SELECTED-INDEX)
-           COMPUTE WS-GRAND-TOTAL = WS-TOTAL + WS-TAX-AMOUNT.
+               (WS-TOTAL - WS-DISCOUNT-AMOUNT)
+               * PRODUCT-GST-RATE(WS-SELECTED-INDEX)
+           COMPUTE WS-GRAND-TOTAL =
+               WS-TOTAL - WS-DISCOUNT-AMOUNT + WS-TAX-AMOUNT.
 
        APPLY-SALE-TO-STOCK.
            SUBTRACT WS-INPUT-QUANTITY FROM
@@ -423,11 +438,15 @@
        DISPLAY-SALE-RECEIPT.
            MOVE WS-TOTAL TO WS-DISPLAY-AMOUNT
            MOVE WS-TAX-AMOUNT TO WS-DISPLAY-TAX
+           MOVE WS-DISCOUNT-AMOUNT TO WS-DISPLAY-DISCOUNT
            DISPLAY ' '
            DISPLAY '----------- SALE RECEIPT -----------'
            DISPLAY 'Product: ' PRODUCT-NAME(WS-SELECTED-INDEX)
            DISPLAY 'Quantity: ' WS-INPUT-QUANTITY
            DISPLAY 'Subtotal: ' WS-DISPLAY-AMOUNT
+           IF WS-DISCOUNT-AMOUNT > 0
+               DISPLAY 'Discount: ' WS-DISPLAY-DISCOUNT ' (bulk)'
+           END-IF
            DISPLAY 'GST:      ' WS-DISPLAY-TAX
            DISPLAY 'Total:    ' WS-GRAND-TOTAL
            DISPLAY 'Currency: ' WS-CURRENCY
@@ -484,6 +503,8 @@
            MOVE 0 TO WS-TOTAL
            MOVE 0 TO WS-GRAND-TOTAL
            MOVE 0 TO WS-TAX-AMOUNT
+           MOVE 0 TO WS-DISCOUNT-RATE
+           MOVE 0 TO WS-DISCOUNT-AMOUNT
            MOVE 0 TO WS-QUANTITY
            MOVE 0 TO WS-UNIT-PRICE.
 
@@ -504,6 +525,8 @@
                    TRANSACTION-AMOUNT(WS-TRANSACTION-COUNT)
                MOVE WS-TAX-AMOUNT TO
                    TRANSACTION-GST(WS-TRANSACTION-COUNT)
+               MOVE WS-DISCOUNT-AMOUNT TO
+                   TRANSACTION-DISCOUNT(WS-TRANSACTION-COUNT)
                ACCEPT WS-DATE-TEXT FROM DATE YYYYMMDD
                MOVE WS-DATE-TEXT TO
                    TRANSACTION-DATE(WS-TRANSACTION-COUNT)
