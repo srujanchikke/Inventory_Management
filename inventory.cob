@@ -55,6 +55,7 @@
               10 PRODUCT-REORDER-LEVEL PIC 9(7).
               10 PRODUCT-ACTIVE        PIC X.
               10 PRODUCT-SOLD-COUNT    PIC 9(9) COMP-5.
+              10 PRODUCT-RETURN-COUNT  PIC 9(9) COMP-5.
               10 PRODUCT-GST-RATE      PIC 9V99.
       * One row per stock movement (receipt for now, sales later).
        01  TRANSACTION-TABLE.
@@ -157,6 +158,7 @@
            DISPLAY '4. Update product details'
            DISPLAY '5. Receive stock'
            DISPLAY '6. Record a sale'
+           DISPLAY '7. Process a return'
            DISPLAY '0. Exit'
            DISPLAY '---------------------------------------'.
 
@@ -173,6 +175,7 @@
                WHEN '4' PERFORM UPD-PRODUCT
                WHEN '5' PERFORM RECEIVE-STOCK
                WHEN '6' PERFORM RECORD-SALE
+               WHEN '7' PERFORM PROCESS-RETURN
                WHEN '0' MOVE 'N' TO WS-RUNNING
                WHEN OTHER
                    DISPLAY 'Invalid menu choice. Please try again.'
@@ -329,6 +332,7 @@
                MOVE 5 TO PRODUCT-REORDER-LEVEL(WS-PRODUCT-COUNT)
                MOVE 'Y' TO PRODUCT-ACTIVE(WS-PRODUCT-COUNT)
                MOVE 0 TO PRODUCT-SOLD-COUNT(WS-PRODUCT-COUNT)
+               MOVE 0 TO PRODUCT-RETURN-COUNT(WS-PRODUCT-COUNT)
                MOVE WS-GST-RATE TO PRODUCT-GST-RATE(WS-PRODUCT-COUNT)
                ADD 1 TO WS-NEXT-PRODUCT-ID
            END-IF.
@@ -428,6 +432,53 @@
            DISPLAY 'Total:    ' WS-GRAND-TOTAL
            DISPLAY 'Currency: ' WS-CURRENCY
            DISPLAY '------------------------------------'.
+
+      * Customer brings items back. Can't return more than was sold.
+       PROCESS-RETURN.
+           PERFORM ACCEPT-PRODUCT-ID
+           PERFORM FIND-PRODUCT-BY-ID
+           IF WS-ID-FOUND = 'Y'
+               IF WS-TRANSACTION-COUNT >= WS-TRANSACTION-LIMIT
+                   DISPLAY 'Transaction history full; return cancelled.'
+               ELSE
+                   PERFORM ACCEPT-RETURN-QUANTITY
+                   IF WS-INPUT-QUANTITY > 0
+                       IF PRODUCT-SOLD-COUNT(WS-SELECTED-INDEX)
+                           >= WS-INPUT-QUANTITY
+                           PERFORM APPLY-RETURN-TO-STOCK
+                           PERFORM LOG-RETURN
+                           DISPLAY 'Return processed successfully.'
+                       ELSE
+                           DISPLAY 'Return exceeds sold quantity.'
+                       END-IF
+                   ELSE
+                       DISPLAY 'Return quantity must be positive.'
+                   END-IF
+               END-IF
+           ELSE
+               DISPLAY 'Product ID was not found.'
+           END-IF.
+
+       ACCEPT-RETURN-QUANTITY.
+           MOVE 0 TO WS-INPUT-QUANTITY
+           DISPLAY 'Quantity returned: ' WITH NO ADVANCING
+           ACCEPT WS-INPUT-QUANTITY.
+
+       APPLY-RETURN-TO-STOCK.
+           ADD WS-INPUT-QUANTITY TO
+               PRODUCT-QUANTITY(WS-SELECTED-INDEX)
+           SUBTRACT WS-INPUT-QUANTITY FROM
+               PRODUCT-SOLD-COUNT(WS-SELECTED-INDEX)
+           ADD WS-INPUT-QUANTITY TO
+               PRODUCT-RETURN-COUNT(WS-SELECTED-INDEX).
+
+       LOG-RETURN.
+           PERFORM RESET-CALCULATION-FIELDS
+           MOVE 'RETURN' TO WS-TRANSACTION-MODE
+           MOVE WS-INPUT-QUANTITY TO WS-QUANTITY
+           MOVE PRODUCT-UNIT-PRICE(WS-SELECTED-INDEX) TO WS-UNIT-PRICE
+           COMPUTE WS-TOTAL = WS-QUANTITY * WS-UNIT-PRICE
+           PERFORM WRITE-TRANSACTION.
 
        RESET-CALCULATION-FIELDS.
            MOVE 0 TO WS-TOTAL
