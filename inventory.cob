@@ -530,7 +530,15 @@
            MOVE WS-INPUT-QUANTITY TO WS-QUANTITY
            MOVE PRODUCT-UNIT-PRICE(WS-SELECTED-INDEX) TO WS-UNIT-PRICE
            COMPUTE WS-TOTAL = WS-QUANTITY * WS-UNIT-PRICE
-           PERFORM WRITE-TRANSACTION.
+      * GST charged on these units is refunded along with the price.
+      * Bulk discount is not taken back - returns are usually 1-2 pcs.
+           COMPUTE WS-TAX-AMOUNT ROUNDED =
+               WS-TOTAL * PRODUCT-GST-RATE(WS-SELECTED-INDEX)
+           COMPUTE WS-GRAND-TOTAL = WS-TOTAL + WS-TAX-AMOUNT
+           PERFORM WRITE-TRANSACTION
+           MOVE WS-GRAND-TOTAL TO WS-DISPLAY-AMOUNT
+           DISPLAY 'Refund to customer: ' WS-DISPLAY-AMOUNT
+               ' ' WS-CURRENCY.
 
        RESET-CALCULATION-FIELDS.
            MOVE 0 TO WS-TOTAL
