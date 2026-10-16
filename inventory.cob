@@ -20,7 +20,8 @@
            05 WS-SELECTED-ID           PIC 9(6) VALUE 0.
            05 WS-SELECTED-INDEX        PIC 9(4) COMP-5 VALUE 0.
            05 WS-NEXT-PRODUCT-ID       PIC 9(6) VALUE 1.
-           05 WS-INPUT-PRICE           PIC 9(7)V99 VALUE 0.
+      * Signed so a typed minus sign is kept and can be rejected.
+           05 WS-INPUT-PRICE           PIC S9(7)V99 VALUE 0.
            05 WS-INPUT-QUANTITY        PIC S9(7) COMP-5 VALUE 0.
            05 WS-TEMP-NAME             PIC X(30) VALUE SPACES.
            05 WS-TEMP-CATEGORY         PIC X(20) VALUE SPACES.
@@ -310,18 +311,28 @@
                MOVE 'UNSPECIFIED' TO WS-TEMP-SUPPLIER
            END-IF.
 
+      * Keeps asking until the quantity is zero or more.
+      * (it used to quietly change a negative entry to 0)
        ACCEPT-INITIAL-STOCK.
-           MOVE 0 TO WS-INPUT-QUANTITY
-           DISPLAY 'Initial quantity: ' WITH NO ADVANCING
-           ACCEPT WS-INPUT-QUANTITY
-           IF WS-INPUT-QUANTITY < 0
-               MOVE 0 TO WS-INPUT-QUANTITY
-           END-IF.
+           MOVE -1 TO WS-INPUT-QUANTITY
+           PERFORM UNTIL WS-INPUT-QUANTITY >= 0
+               DISPLAY 'Initial quantity: ' WITH NO ADVANCING
+               ACCEPT WS-INPUT-QUANTITY
+               IF WS-INPUT-QUANTITY < 0
+                   DISPLAY 'Quantity cannot be negative.'
+               END-IF
+           END-PERFORM.
 
+      * Same idea for price, and a free item makes no sense here.
        ACCEPT-UNIT-PRICE.
            MOVE 0 TO WS-INPUT-PRICE
-           DISPLAY 'Unit price: ' WITH NO ADVANCING
-           ACCEPT WS-INPUT-PRICE.
+           PERFORM UNTIL WS-INPUT-PRICE > 0
+               DISPLAY 'Unit price: ' WITH NO ADVANCING
+               ACCEPT WS-INPUT-PRICE
+               IF WS-INPUT-PRICE NOT > 0
+                   DISPLAY 'Price must be more than zero.'
+               END-IF
+           END-PERFORM.
 
        GET-GST-RATE.
       *> slabs after the Sept 2025 rate cut: 0 / 5 / 18
