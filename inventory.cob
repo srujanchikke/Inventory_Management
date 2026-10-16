@@ -32,11 +32,16 @@
            05 WS-QUANTITY              PIC S9(7) COMP-5 VALUE 0.
            05 WS-UNIT-PRICE            PIC 9(7)V99 VALUE 0.
            05 WS-TOTAL                 PIC 9(9)V99 VALUE 0.
+           05 WS-GRAND-TOTAL           PIC 9(11)V99 VALUE 0.
+      * GST - 18% on everything for now, needs to be per item
+           05 WS-TAX-RATE              PIC 9V9999 VALUE 0.1800.
+           05 WS-TAX-AMOUNT            PIC 9(9)V99 VALUE 0.
            05 WS-DATE-TEXT             PIC X(8) VALUE SPACES.
        01  WS-DISPLAY-FIELDS.
            05 WS-DISPLAY-ID            PIC ZZZZZ9.
            05 WS-DISPLAY-QUANTITY      PIC ZZZZZZZ9.
            05 WS-DISPLAY-AMOUNT        PIC Z,ZZZ,ZZZ,ZZ9.99.
+           05 WS-DISPLAY-TAX           PIC Z,ZZZ,ZZZ,ZZ9.99.
            05 WS-DISPLAY-COUNT         PIC ZZZZ9.
        01  PRODUCT-TABLE.
            05 PRODUCT-ENTRY OCCURS 200 TIMES.
@@ -48,6 +53,7 @@
               10 PRODUCT-UNIT-PRICE    PIC 9(7)V99.
               10 PRODUCT-REORDER-LEVEL PIC 9(7).
               10 PRODUCT-ACTIVE        PIC X.
+              10 PRODUCT-SOLD-COUNT    PIC 9(9) COMP-5.
       * One row per stock movement (receipt for now, sales later).
        01  TRANSACTION-TABLE.
            05 TRANSACTION-ENTRY OCCURS 1000 TIMES.
@@ -142,6 +148,7 @@
            DISPLAY '3. Add a product'
            DISPLAY '4. Update product details'
            DISPLAY '5. Receive stock'
+           DISPLAY '6. Record a sale'
            DISPLAY '0. Exit'
            DISPLAY '---------------------------------------'.
 
@@ -157,6 +164,7 @@
                WHEN '3' PERFORM ADD-PRODUCT
                WHEN '4' PERFORM UPD-PRODUCT
                WHEN '5' PERFORM RECEIVE-STOCK
+               WHEN '6' PERFORM RECORD-SALE
                WHEN '0' MOVE 'N' TO WS-RUNNING
                WHEN OTHER
                    DISPLAY 'Invalid menu choice. Please try again.'
@@ -295,6 +303,7 @@
                    PRODUCT-UNIT-PRICE(WS-PRODUCT-COUNT)
                MOVE 5 TO PRODUCT-REORDER-LEVEL(WS-PRODUCT-COUNT)
                MOVE 'Y' TO PRODUCT-ACTIVE(WS-PRODUCT-COUNT)
+               MOVE 0 TO PRODUCT-SOLD-COUNT(WS-PRODUCT-COUNT)
                ADD 1 TO WS-NEXT-PRODUCT-ID
            END-IF.
 
@@ -331,6 +340,73 @@
            MOVE 0 TO WS-INPUT-QUANTITY
            DISPLAY 'Quantity received: ' WITH NO ADVANCING
            ACCEPT WS-INPUT-QUANTITY.
+
+      * Counter sale - checks stock, logs it and prints a receipt.
+       RECORD-SALE.
+           PERFORM ACCEPT-PRODUCT-ID
+           PERFORM FIND-PRODUCT-BY-ID
+           IF WS-ID-FOUND = 'Y'
+               IF WS-TRANSACTION-COUNT >= WS-TRANSACTION-LIMIT
+                   DISPLAY 'Transaction history full; sale cancelled.'
+               ELSE
+                   PERFORM ACCEPT-SALE-QUANTITY
+                   IF WS-INPUT-QUANTITY > 0
+                       IF PRODUCT-QUANTITY(WS-SELECTED-INDEX)
+                           >= WS-INPUT-QUANTITY
+                           PERFORM CALCULATE-SALE-TOTAL
+                           PERFORM APPLY-SALE-TO-STOCK
+                           MOVE 'SALE' TO WS-TRANSACTION-MODE
+                           PERFORM WRITE-TRANSACTION
+                           PERFORM DISPLAY-SALE-RECEIPT
+                       ELSE
+                           DISPLAY 'Insufficient stock for this sale.'
+                       END-IF
+                   ELSE
+                       DISPLAY 'Sale quantity must be positive.'
+                   END-IF
+               END-IF
+           ELSE
+               DISPLAY 'Product ID was not found.'
+           END-IF.
+
+       ACCEPT-SALE-QUANTITY.
+           MOVE 0 TO WS-INPUT-QUANTITY
+           DISPLAY 'Quantity sold: ' WITH NO ADVANCING
+           ACCEPT WS-INPUT-QUANTITY.
+
+       CALCULATE-SALE-TOTAL.
+           PERFORM RESET-CALCULATION-FIELDS
+           MOVE WS-INPUT-QUANTITY TO WS-QUANTITY
+           MOVE PRODUCT-UNIT-PRICE(WS-SELECTED-INDEX) TO WS-UNIT-PRICE
+           COMPUTE WS-TOTAL ROUNDED = WS-QUANTITY * WS-UNIT-PRICE
+           COMPUTE WS-TAX-AMOUNT ROUNDED = WS-TOTAL * WS-TAX-RATE
+           COMPUTE WS-GRAND-TOTAL = WS-TOTAL + WS-TAX-AMOUNT.
+
+       APPLY-SALE-TO-STOCK.
+           SUBTRACT WS-INPUT-QUANTITY FROM
+               PRODUCT-QUANTITY(WS-SELECTED-INDEX)
+           ADD WS-INPUT-QUANTITY TO
+               PRODUCT-SOLD-COUNT(WS-SELECTED-INDEX).
+
+       DISPLAY-SALE-RECEIPT.
+           MOVE WS-TOTAL TO WS-DISPLAY-AMOUNT
+           MOVE WS-TAX-AMOUNT TO WS-DISPLAY-TAX
+           DISPLAY ' '
+           DISPLAY '----------- SALE RECEIPT -----------'
+           DISPLAY 'Product: ' PRODUCT-NAME(WS-SELECTED-INDEX)
+           DISPLAY 'Quantity: ' WS-INPUT-QUANTITY
+           DISPLAY 'Subtotal: ' WS-DISPLAY-AMOUNT
+           DISPLAY 'GST:      ' WS-DISPLAY-TAX
+           DISPLAY 'Total:    ' WS-GRAND-TOTAL
+           DISPLAY 'Currency: ' WS-CURRENCY
+           DISPLAY '------------------------------------'.
+
+       RESET-CALCULATION-FIELDS.
+           MOVE 0 TO WS-TOTAL
+           MOVE 0 TO WS-GRAND-TOTAL
+           MOVE 0 TO WS-TAX-AMOUNT
+           MOVE 0 TO WS-QUANTITY
+           MOVE 0 TO WS-UNIT-PRICE.
 
       * Adds a row to the transaction table.
       * Caller sets WS-TRANSACTION-MODE, WS-QUANTITY and WS-TOTAL.
