@@ -130,38 +130,39 @@
            END-PERFORM.
 
       * A few items so the menus have something to show while testing.
+      * Suppliers are the ones we actually buy from.
        LOAD-SAMPLE-DATA.
            MOVE 'Notebook - Ruled' TO WS-TEMP-NAME
            MOVE 'Stationery' TO WS-TEMP-CATEGORY
-           MOVE 'Supplier A' TO WS-TEMP-SUPPLIER
+           MOVE 'Sri Lakshmi Stationers' TO WS-TEMP-SUPPLIER
            MOVE 120 TO WS-INPUT-QUANTITY
            MOVE 45.00 TO WS-INPUT-PRICE
            MOVE 0 TO WS-GST-RATE
            PERFORM ADD-PRODUCT-FROM-TEMP
            MOVE 'Ball Pen - Blue' TO WS-TEMP-NAME
            MOVE 'Stationery' TO WS-TEMP-CATEGORY
-           MOVE 'Supplier A' TO WS-TEMP-SUPPLIER
+           MOVE 'Balaji Pens & Refills' TO WS-TEMP-SUPPLIER
            MOVE 250 TO WS-INPUT-QUANTITY
            MOVE 10.00 TO WS-INPUT-PRICE
            MOVE 0.18 TO WS-GST-RATE
            PERFORM ADD-PRODUCT-FROM-TEMP
            MOVE 'USB-C Cable' TO WS-TEMP-NAME
            MOVE 'Electronics' TO WS-TEMP-CATEGORY
-           MOVE 'Supplier B' TO WS-TEMP-SUPPLIER
+           MOVE 'Laxmi Electronics, Koti' TO WS-TEMP-SUPPLIER
            MOVE 35 TO WS-INPUT-QUANTITY
            MOVE 199.00 TO WS-INPUT-PRICE
            MOVE 0.18 TO WS-GST-RATE
            PERFORM ADD-PRODUCT-FROM-TEMP
            MOVE 'Wireless Mouse' TO WS-TEMP-NAME
            MOVE 'Electronics' TO WS-TEMP-CATEGORY
-           MOVE 'Supplier B' TO WS-TEMP-SUPPLIER
+           MOVE 'Sai Computers, CTC' TO WS-TEMP-SUPPLIER
            MOVE 18 TO WS-INPUT-QUANTITY
            MOVE 649.00 TO WS-INPUT-PRICE
            MOVE 0.18 TO WS-GST-RATE
            PERFORM ADD-PRODUCT-FROM-TEMP
            MOVE 'Bath Soap (Pack of 4)' TO WS-TEMP-NAME
            MOVE 'Household' TO WS-TEMP-CATEGORY
-           MOVE 'Supplier C' TO WS-TEMP-SUPPLIER
+           MOVE 'Annapurna Home Needs' TO WS-TEMP-SUPPLIER
            MOVE 42 TO WS-INPUT-QUANTITY
            MOVE 156.00 TO WS-INPUT-PRICE
            MOVE 0.05 TO WS-GST-RATE
