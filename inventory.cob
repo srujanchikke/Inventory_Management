@@ -468,16 +468,20 @@
            MOVE WS-TOTAL TO WS-DISPLAY-AMOUNT
            MOVE WS-TAX-AMOUNT TO WS-DISPLAY-TAX
            MOVE WS-DISCOUNT-AMOUNT TO WS-DISPLAY-DISCOUNT
+           MOVE WS-INPUT-QUANTITY TO WS-DISPLAY-QUANTITY
            DISPLAY ' '
            DISPLAY '----------- SALE RECEIPT -----------'
            DISPLAY 'Product: ' PRODUCT-NAME(WS-SELECTED-INDEX)
-           DISPLAY 'Quantity: ' WS-INPUT-QUANTITY
+           DISPLAY 'Quantity: ' WS-DISPLAY-QUANTITY
            DISPLAY 'Subtotal: ' WS-DISPLAY-AMOUNT
            IF WS-DISCOUNT-AMOUNT > 0
                DISPLAY 'Discount: ' WS-DISPLAY-DISCOUNT ' (bulk)'
            END-IF
            DISPLAY 'GST:      ' WS-DISPLAY-TAX
-           DISPLAY 'Total:    ' WS-GRAND-TOTAL
+      *> reuse the amount picture so the columns line up; a single
+      *> bill over 10 digits of rupees isn't happening at this counter
+           MOVE WS-GRAND-TOTAL TO WS-DISPLAY-AMOUNT
+           DISPLAY 'Total:    ' WS-DISPLAY-AMOUNT
            DISPLAY 'Currency: ' WS-CURRENCY
            DISPLAY '------------------------------------'.
 
