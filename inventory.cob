@@ -16,6 +16,7 @@
            05 WS-INDEX                 PIC 9(4) COMP-5 VALUE 0.
            05 WS-INDEX-2               PIC 9(4) COMP-5 VALUE 0.
            05 WS-ID-FOUND              PIC X VALUE 'N'.
+              88 PRODUCT-FOUND         VALUE 'Y'.
            05 WS-SELECTED-ID           PIC 9(6) VALUE 0.
            05 WS-SELECTED-INDEX        PIC 9(4) COMP-5 VALUE 0.
            05 WS-NEXT-PRODUCT-ID       PIC 9(6) VALUE 1.
@@ -112,6 +113,7 @@
            DISPLAY '1. List all products'
            DISPLAY '2. Search product by ID'
            DISPLAY '3. Add a product'
+           DISPLAY '4. Update product details'
            DISPLAY '0. Exit'
            DISPLAY '---------------------------------------'.
 
@@ -125,6 +127,7 @@
                WHEN '1' PERFORM LIST-PRODUCTS
                WHEN '2' PERFORM SEARCH-PRODUCT
                WHEN '3' PERFORM ADD-PRODUCT
+               WHEN '4' PERFORM UPD-PRODUCT
                WHEN '0' MOVE 'N' TO WS-RUNNING
                WHEN OTHER
                    DISPLAY 'Invalid menu choice. Please try again.'
@@ -269,3 +272,51 @@
        SHUTDOWN-SYSTEM.
            DISPLAY ' '
            DISPLAY 'Session ended.'.
+
+       UPD-PRODUCT.
+           PERFORM ACCEPT-PRODUCT-ID
+           PERFORM FIND-PRODUCT-BY-ID
+           IF NOT PRODUCT-FOUND
+               DISPLAY 'Product ID was not found.'
+               EXIT PARAGRAPH
+           END-IF
+           DISPLAY 'Leave blank (or 0) to keep the current value.'
+           MOVE SPACES TO WS-TEMP-NAME
+           DISPLAY 'New name: ' WITH NO ADVANCING
+           ACCEPT WS-TEMP-NAME
+           IF WS-TEMP-NAME NOT = SPACES
+               MOVE WS-TEMP-NAME TO PRODUCT-NAME(WS-SELECTED-INDEX)
+           END-IF
+           MOVE SPACES TO WS-TEMP-CATEGORY
+           DISPLAY 'New category: ' WITH NO ADVANCING
+           ACCEPT WS-TEMP-CATEGORY
+           IF WS-TEMP-CATEGORY NOT = SPACES
+               MOVE WS-TEMP-CATEGORY
+                 TO PRODUCT-CATEGORY(WS-SELECTED-INDEX)
+           END-IF
+           MOVE SPACES TO WS-TEMP-SUPPLIER
+           DISPLAY 'New supplier: ' WITH NO ADVANCING
+           ACCEPT WS-TEMP-SUPPLIER
+           IF WS-TEMP-SUPPLIER NOT = SPACES
+               MOVE WS-TEMP-SUPPLIER
+                 TO PRODUCT-SUPPLIER(WS-SELECTED-INDEX)
+           END-IF
+           MOVE 0 TO WS-INPUT-PRICE
+           DISPLAY 'New unit price: ' WITH NO ADVANCING
+           ACCEPT WS-INPUT-PRICE
+           IF WS-INPUT-PRICE > 0
+               MOVE WS-INPUT-PRICE
+                 TO PRODUCT-UNIT-PRICE(WS-SELECTED-INDEX)
+           END-IF
+      *> reorder level: 0 = keep, negative is rejected
+           MOVE 0 TO WS-INPUT-QUANTITY
+           DISPLAY 'New reorder level: ' WITH NO ADVANCING
+           ACCEPT WS-INPUT-QUANTITY
+           EVALUATE TRUE
+               WHEN WS-INPUT-QUANTITY < 0
+                   DISPLAY 'Reorder level cannot be negative, kept.'
+               WHEN WS-INPUT-QUANTITY > 0
+                   MOVE WS-INPUT-QUANTITY
+                     TO PRODUCT-REORDER-LEVEL(WS-SELECTED-INDEX)
+           END-EVALUATE
+           DISPLAY 'Product ' WS-SELECTED-ID ' updated.'.
