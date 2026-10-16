@@ -33,9 +33,10 @@
            05 WS-UNIT-PRICE            PIC 9(7)V99 VALUE 0.
            05 WS-TOTAL                 PIC 9(9)V99 VALUE 0.
            05 WS-GRAND-TOTAL           PIC 9(11)V99 VALUE 0.
-      * GST - 18% on everything for now, needs to be per item
-           05 WS-TAX-RATE              PIC 9V9999 VALUE 0.1800.
            05 WS-TAX-AMOUNT            PIC 9(9)V99 VALUE 0.
+           05 WS-GST-PCT               PIC 99 VALUE 0.
+              88 VALID-GST-SLAB        VALUES 0 5 18.
+           05 WS-GST-RATE              PIC 9V99 VALUE 0.
            05 WS-DATE-TEXT             PIC X(8) VALUE SPACES.
        01  WS-DISPLAY-FIELDS.
            05 WS-DISPLAY-ID            PIC ZZZZZ9.
@@ -54,6 +55,7 @@
               10 PRODUCT-REORDER-LEVEL PIC 9(7).
               10 PRODUCT-ACTIVE        PIC X.
               10 PRODUCT-SOLD-COUNT    PIC 9(9) COMP-5.
+              10 PRODUCT-GST-RATE      PIC 9V99.
       * One row per stock movement (receipt for now, sales later).
        01  TRANSACTION-TABLE.
            05 TRANSACTION-ENTRY OCCURS 1000 TIMES.
@@ -62,6 +64,7 @@
               10 TRANSACTION-TYPE      PIC X(8).
               10 TRANSACTION-QUANTITY  PIC S9(7) COMP-5.
               10 TRANSACTION-AMOUNT    PIC 9(9)V99.
+              10 TRANSACTION-GST       PIC 9(9)V99.
               10 TRANSACTION-DATE      PIC X(10).
               10 TRANSACTION-STATUS    PIC X.
        01  WS-TABLE-COUNTERS.
@@ -114,30 +117,35 @@
            MOVE 'Supplier A' TO WS-TEMP-SUPPLIER
            MOVE 120 TO WS-INPUT-QUANTITY
            MOVE 45.00 TO WS-INPUT-PRICE
+           MOVE 0 TO WS-GST-RATE
            PERFORM ADD-PRODUCT-FROM-TEMP
            MOVE 'Ball Pen - Blue' TO WS-TEMP-NAME
            MOVE 'Stationery' TO WS-TEMP-CATEGORY
            MOVE 'Supplier A' TO WS-TEMP-SUPPLIER
            MOVE 250 TO WS-INPUT-QUANTITY
            MOVE 10.00 TO WS-INPUT-PRICE
+           MOVE 0.18 TO WS-GST-RATE
            PERFORM ADD-PRODUCT-FROM-TEMP
            MOVE 'USB-C Cable' TO WS-TEMP-NAME
            MOVE 'Electronics' TO WS-TEMP-CATEGORY
            MOVE 'Supplier B' TO WS-TEMP-SUPPLIER
            MOVE 35 TO WS-INPUT-QUANTITY
            MOVE 199.00 TO WS-INPUT-PRICE
+           MOVE 0.18 TO WS-GST-RATE
            PERFORM ADD-PRODUCT-FROM-TEMP
            MOVE 'Wireless Mouse' TO WS-TEMP-NAME
            MOVE 'Electronics' TO WS-TEMP-CATEGORY
            MOVE 'Supplier B' TO WS-TEMP-SUPPLIER
            MOVE 18 TO WS-INPUT-QUANTITY
            MOVE 649.00 TO WS-INPUT-PRICE
+           MOVE 0.18 TO WS-GST-RATE
            PERFORM ADD-PRODUCT-FROM-TEMP
            MOVE 'Bath Soap (Pack of 4)' TO WS-TEMP-NAME
            MOVE 'Household' TO WS-TEMP-CATEGORY
            MOVE 'Supplier C' TO WS-TEMP-SUPPLIER
            MOVE 42 TO WS-INPUT-QUANTITY
            MOVE 156.00 TO WS-INPUT-PRICE
+           MOVE 0.05 TO WS-GST-RATE
            PERFORM ADD-PRODUCT-FROM-TEMP.
 
        DISPLAY-MAIN-MENU.
@@ -213,6 +221,9 @@
                    PRODUCT-UNIT-PRICE(WS-SELECTED-INDEX)
                DISPLAY 'Reorder level: '
                    PRODUCT-REORDER-LEVEL(WS-SELECTED-INDEX)
+               COMPUTE WS-GST-PCT =
+                   PRODUCT-GST-RATE(WS-SELECTED-INDEX) * 100
+               DISPLAY 'GST %: ' WS-GST-PCT
            ELSE
                DISPLAY 'No active product exists with that ID.'
            END-IF.
@@ -245,6 +256,7 @@
                PERFORM ACCEPT-PRODUCT-SUPPLIER
                PERFORM ACCEPT-INITIAL-STOCK
                PERFORM ACCEPT-UNIT-PRICE
+               PERFORM GET-GST-RATE
                PERFORM ADD-PRODUCT-FROM-TEMP
                DISPLAY 'Product added successfully.'
            END-IF.
@@ -286,6 +298,19 @@
            DISPLAY 'Unit price: ' WITH NO ADVANCING
            ACCEPT WS-INPUT-PRICE.
 
+       GET-GST-RATE.
+      *> slabs after the Sept 2025 rate cut: 0 / 5 / 18
+      *> (40% is only sin goods - we don't stock any)
+           PERFORM WITH TEST AFTER UNTIL VALID-GST-SLAB
+               MOVE 0 TO WS-GST-PCT
+               DISPLAY 'GST % (0/5/18): ' WITH NO ADVANCING
+               ACCEPT WS-GST-PCT
+               IF NOT VALID-GST-SLAB
+                   DISPLAY 'Not a GST slab, try again.'
+               END-IF
+           END-PERFORM
+           COMPUTE WS-GST-RATE = WS-GST-PCT / 100.
+
       * Copies the WS-TEMP / WS-INPUT fields into the next free row.
        ADD-PRODUCT-FROM-TEMP.
            IF WS-PRODUCT-COUNT < 200
@@ -304,6 +329,7 @@
                MOVE 5 TO PRODUCT-REORDER-LEVEL(WS-PRODUCT-COUNT)
                MOVE 'Y' TO PRODUCT-ACTIVE(WS-PRODUCT-COUNT)
                MOVE 0 TO PRODUCT-SOLD-COUNT(WS-PRODUCT-COUNT)
+               MOVE WS-GST-RATE TO PRODUCT-GST-RATE(WS-PRODUCT-COUNT)
                ADD 1 TO WS-NEXT-PRODUCT-ID
            END-IF.
 
@@ -323,6 +349,7 @@
                            TO WS-UNIT-PRICE
                        COMPUTE WS-TOTAL ROUNDED =
                            WS-QUANTITY * WS-UNIT-PRICE
+                       MOVE 0 TO WS-TAX-AMOUNT    *> no GST on inward
                        ADD WS-INPUT-QUANTITY TO
                            PRODUCT-QUANTITY(WS-SELECTED-INDEX)
                        MOVE 'RECEIPT' TO WS-TRANSACTION-MODE
@@ -379,7 +406,8 @@
            MOVE WS-INPUT-QUANTITY TO WS-QUANTITY
            MOVE PRODUCT-UNIT-PRICE(WS-SELECTED-INDEX) TO WS-UNIT-PRICE
            COMPUTE WS-TOTAL ROUNDED = WS-QUANTITY * WS-UNIT-PRICE
-           COMPUTE WS-TAX-AMOUNT ROUNDED = WS-TOTAL * WS-TAX-RATE
+           COMPUTE WS-TAX-AMOUNT ROUNDED =
+               WS-TOTAL * PRODUCT-GST-RATE(WS-SELECTED-INDEX)
            COMPUTE WS-GRAND-TOTAL = WS-TOTAL + WS-TAX-AMOUNT.
 
        APPLY-SALE-TO-STOCK.
@@ -423,6 +451,8 @@
                    TRANSACTION-QUANTITY(WS-TRANSACTION-COUNT)
                MOVE WS-TOTAL TO
                    TRANSACTION-AMOUNT(WS-TRANSACTION-COUNT)
+               MOVE WS-TAX-AMOUNT TO
+                   TRANSACTION-GST(WS-TRANSACTION-COUNT)
                ACCEPT WS-DATE-TEXT FROM DATE YYYYMMDD
                MOVE WS-DATE-TEXT TO
                    TRANSACTION-DATE(WS-TRANSACTION-COUNT)
