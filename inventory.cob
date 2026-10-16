@@ -165,6 +165,7 @@
            DISPLAY '5. Receive stock'
            DISPLAY '6. Record a sale'
            DISPLAY '7. Process a return'
+           DISPLAY '8. Low-stock report'
            DISPLAY '0. Exit'
            DISPLAY '---------------------------------------'.
 
@@ -182,6 +183,7 @@
                WHEN '5' PERFORM RECEIVE-STOCK
                WHEN '6' PERFORM RECORD-SALE
                WHEN '7' PERFORM PROCESS-RETURN
+               WHEN '8' PERFORM LOW-STOCK-REPORT
                WHEN '0' MOVE 'N' TO WS-RUNNING
                WHEN OTHER
                    DISPLAY 'Invalid menu choice. Please try again.'
@@ -534,6 +536,31 @@
                ADD 1 TO WS-NEXT-TRANSACTION-ID
            ELSE
                DISPLAY 'Transaction history is full.'
+           END-IF.
+
+      * Anything at or under its reorder level, so we know what to
+      * order on the next supplier visit.
+       LOW-STOCK-REPORT.
+           DISPLAY ' '
+           DISPLAY 'LOW-STOCK REPORT'
+           DISPLAY 'Products at or below their reorder level:'
+           MOVE 0 TO WS-REPORT-COUNT
+           PERFORM VARYING WS-INDEX FROM 1 BY 1
+               UNTIL WS-INDEX > WS-PRODUCT-COUNT
+               IF PRODUCT-ACTIVE(WS-INDEX) = 'Y'
+                   AND PRODUCT-QUANTITY(WS-INDEX)
+                       <= PRODUCT-REORDER-LEVEL(WS-INDEX)
+                   PERFORM DISPLAY-ONE-PRODUCT
+                   DISPLAY '       supplier: '
+                       PRODUCT-SUPPLIER(WS-INDEX)
+                   ADD 1 TO WS-REPORT-COUNT
+               END-IF
+           END-PERFORM
+           IF WS-REPORT-COUNT = 0
+               DISPLAY 'No products are currently low in stock.'
+           ELSE
+               MOVE WS-REPORT-COUNT TO WS-DISPLAY-COUNT
+               DISPLAY WS-DISPLAY-COUNT ' item(s) need restocking.'
            END-IF.
 
        SHUTDOWN-SYSTEM.
